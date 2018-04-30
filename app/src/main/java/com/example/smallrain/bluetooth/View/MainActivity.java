@@ -16,8 +16,6 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.view.ViewConfiguration;
-import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.ListView;
 import android.widget.Toast;
@@ -29,7 +27,6 @@ import com.example.smallrain.bluetooth.Controller.connect.ClientThread;
 import com.example.smallrain.bluetooth.Controller.connect.Constant;
 
 import java.io.UnsupportedEncodingException;
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -48,16 +45,17 @@ public class MainActivity extends AppCompatActivity {
     private List<BluetoothDevice> deviceList = new ArrayList<>();
     //权限请求码，安卓手机6.0以上只有同意这个权限才能接受到搜索到设备的广播
     private static final int PERMISSION_REQUEST_COARSE_LOCATION = 1;
-
     //服务端
     private ServerSocketThread serverSocketThread;
     //客户端
     private ClientThread clientThread;
-
+    //存放多个clientThread的容器，实现一个设备可以连接多个设备，实现组播功能
+    private ArrayList<ClientThread>clientThreadArrayList=new ArrayList<>();
+    //消息通知
+    private Handler mUIHandler=new MyHandler();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-      // initActionBar();
         setContentView(R.layout.activity_main);
         initUI();
         //广播的过滤器
@@ -74,14 +72,20 @@ public class MainActivity extends AppCompatActivity {
         filter.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
         //注册广播
         registerReceiver(receiver, filter);
+        //权限获取
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             // Android M Permission check
             if (this.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissions(new String[]{Manifest.permission.ACCESS_COARSE_LOCATION}, PERMISSION_REQUEST_COARSE_LOCATION);
             }
         }
+        //如果打开应用之前，蓝牙是已经开启的,则自动开启服务端
+         if(controller.getBlueToothStatus()){
+             serverSocketThread =new ServerSocketThread(controller.getAdapter(),mUIHandler);
+             serverSocketThread.start();
+         }
     }
-    private Handler mUIHandler=new MyHandler();
+
     @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         switch (requestCode) {
@@ -136,18 +140,20 @@ public class MainActivity extends AppCompatActivity {
             {
                 BluetoothDevice remoteDevice=intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                 if(remoteDevice==null){
-                    showToast("no device");
+                    showToast("组员不存在");
                     return;
                 }
                 int status=intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE,0);
                 if(status==BluetoothDevice.BOND_BONDED){
-                    showToast("Bonded "+remoteDevice.getName());
+                    showToast("添加组员成功 ");
+                    //每次新添加一个组员，就断开所有连接，清空容器，重新连接所有连接 因为有新成员的加入
+                    allCancle();
                 }
                 else if(status==BluetoothDevice.BOND_BONDING){
-                    showToast("Bonding "+remoteDevice.getName());
+                    showToast("发送验证......... ");
                 }
                 else if(status==BluetoothDevice.BOND_NONE){
-                    showToast("Not bond "+remoteDevice.getName());
+                    showToast("组员添加失败 ");
                 }
             }
         }
@@ -156,12 +162,12 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        //关闭服务端
         if(serverSocketThread !=null){
             serverSocketThread.cancel();
         }
-        if(clientThread !=null){
-            clientThread.cancel();
-        }
+        //断开所有主动发起的连接
+        allCancle();
         unregisterReceiver(receiver);
     }
     //初始化listview
@@ -184,30 +190,12 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
             BluetoothDevice device = boundedDeviceList.get(i);
-            //如果想连接多个设备，取消下面的if语句
-            if( clientThread != null) {
-                clientThread.cancel();
-            }
             clientThread = new ClientThread(device, controller.getAdapter(), mUIHandler);
+            clientThreadArrayList.add(clientThread);//点击一个设备，该设备存放到要组播的容器
             clientThread.start();
         }
     };
-    //初始化标题栏
-    private void initActionBar() {
-        requestWindowFeature(Window.FEATURE_INDETERMINATE_PROGRESS);
-        getActionBar().setDisplayUseLogoEnabled(false);
-        setProgressBarIndeterminate(true);
-        try {
-            ViewConfiguration config = ViewConfiguration.get(this);
-            Field menuKeyField = ViewConfiguration.class.getDeclaredField("sHasPermanentMenuKey");
-            if (menuKeyField != null) {
-                menuKeyField.setAccessible(true);
-                menuKeyField.setBoolean(config, false);
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-    }
+
     //重写方法，创建选项菜单
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -227,8 +215,17 @@ public class MainActivity extends AppCompatActivity {
         else if(id==R.id.turn_off_bluetooth)
         {
             //关闭蓝牙
-            controller.turnOffBlueTooth();
-            showToast("蓝牙已经关闭");
+            //先关闭服务端，避免抛异常
+            if(controller.getBlueToothStatus())
+            {
+              if (serverSocketThread != null){
+                    serverSocketThread.cancel();
+                    serverSocketThread=null;
+                }
+                allCancle();
+               controller.turnOffBlueTooth();
+            }
+          // showToast("蓝牙已经关闭");
         }
         else if(id==R.id.enable_visiblity)
         {
@@ -237,63 +234,78 @@ public class MainActivity extends AppCompatActivity {
         }
         else if(id==R.id.find_device){
             //扫描其他设备
+            if(controller.getBlueToothStatus()){
             adapter.refresh(deviceList);
             controller.findDevice();
             listView.setOnItemClickListener(bindDeviceClick);
+        }else
+            {
+                showToast("请先打开蓝牙");
+            }
         }
         else if(id==R.id.bonded_device){
             //查看已经绑定的设备
+            if(controller.getBlueToothStatus()){
             boundedDeviceList=controller.getBoundedDeviceList();
             adapter.refresh(boundedDeviceList);
-            listView.setOnItemClickListener(bindedDeviceClick);
-        }
-        else if(id==R.id.listening){
-            //开启服务端
-           if(serverSocketThread !=null){
-               serverSocketThread.cancel();
-           }
-           serverSocketThread =new ServerSocketThread(controller.getAdapter(),mUIHandler);
-           serverSocketThread.start();
-        }
-        else if(id==R.id.stop_listening){
-            //关闭服务端
-            if(serverSocketThread !=null){
-                serverSocketThread.cancel();
+            listView.setOnItemClickListener(null);
+        }else{
+                showToast("请先打开蓝牙");
             }
-        }
-        else if(id==R.id.disconnect){
-            //断开所有连接
-            if(clientThread !=null){
-                clientThread.cancel();
-            }
+
         }
         else if(id==R.id.say_hello){
-          say("Hello");
+            if(controller.getBlueToothStatus()){
+                say("Hello");
+            }
+            else{
+                showToast("请先打开蓝牙");
+            }
+
         }
         else if(id==R.id.say_hi){
-            say("Hi");
+            if(controller.getBlueToothStatus()){
+                say("Hi");
+            }
+            else{
+                showToast("请先打开蓝牙");
+            }
         }
         return super.onOptionsItemSelected(item);
     }
-    private void say(String word){
-        //如果是想实现组播，这里要使用一个容器存放每一个serverSocketThread （组员）然后遍历这个容器，组播出去
-        //并且改变serverSocketThread的run方法，连接一个设备的时候，服务器继续运行打开
-        if(serverSocketThread !=null) {
-            try {
-                serverSocketThread.sendData(word.getBytes("utf-8"));
-            } catch (UnsupportedEncodingException e) {
+    private void say(String word) {
+        //实现组播，组员不能为空才可以进行组播
+        int len=controller.getBoundedDeviceList().size();
+        if(len>0) {
+            //如果已经和所有组员建立好了连接，则直接进行组播
+            if(clientThreadArrayList.size()>0){
+                for (ClientThread temp : clientThreadArrayList) {
+                    try {
+                        temp.sendData(word.getBytes("utf-8"));
+                    } catch (UnsupportedEncodingException e) {
+                    }
+                }
+            }
+            else{
+                //先和所有组员建立连接
+                for (BluetoothDevice device : controller.getBoundedDeviceList()) {
+                    clientThread = new ClientThread(device, controller.getAdapter(), mUIHandler);
+                    clientThread.start();
+                    clientThreadArrayList.add(clientThread);
+                }
+                //然后再实现组播
+                // 缺点：有些连接并没有真正的连接上，但是发送消息的时候也被调用来发送消息
+                for (ClientThread temp : clientThreadArrayList) {
+                    try {
+                        temp.sendData(word.getBytes("utf-8"));
+                    } catch (UnsupportedEncodingException e) {
+                    }
+                }
 
             }
         }
-        //如果是想实现组播，这里要使用一个容器存放每一个clientThread（组员）然后遍历这个容器，组播出去
-            else if(clientThread !=null){
-                try{
-                    clientThread.sendData(word.getBytes("utf-8"));
-            }catch (UnsupportedEncodingException e){
-
-                }
-        }
     }
+
     private class MyHandler extends Handler {
         @Override
         public void handleMessage(Message msg) {
@@ -336,5 +348,31 @@ public class MainActivity extends AppCompatActivity {
             toast.setText(text);
         }
         toast.show();
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        //当发起请求蓝牙打开事件时，会告诉你用户选择的结果
+        if (resultCode == RESULT_OK) {
+            //showToast("打开成功");
+            //蓝牙一旦开启成功，自动开启服务端等待客户端的连接
+            if (serverSocketThread == null) {
+                serverSocketThread = new ServerSocketThread(controller.getAdapter(), mUIHandler);
+                serverSocketThread.start();
+            }
+
+        } else {
+            showToast("打开失败");
+        }
+    }
+    //断开自己主动发起的所有连接,并且清空clientThreadArrayList容器
+    private void allCancle(){
+        if(clientThreadArrayList.size()>0){
+            for(ClientThread temp:clientThreadArrayList)
+            {
+                temp.cancel();
+            }
+            clientThreadArrayList.clear();
+        }
     }
 }

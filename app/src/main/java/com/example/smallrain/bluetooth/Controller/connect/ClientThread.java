@@ -39,7 +39,7 @@ public class ClientThread extends Thread {
              socket.connect();
         }catch (IOException connectException){
             //如果该蓝牙设备的服务端没有开启，则会启动下面的代码，报错
-            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,connectException));
+           handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,connectException));
             try {
                 socket.close();
             }catch (IOException closeException){

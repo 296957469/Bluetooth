@@ -38,28 +38,14 @@ public class ServerSocketThread extends Thread {
                 handler.sendEmptyMessage(Constant.MSG_START_LISTENING);
                 socket = serverSocket.accept();
             } catch (IOException e) {
-                handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR, e));
+                //handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR, e));
+                handler.sendEmptyMessage(Constant.MSG_FINISH_LISTENING);
                 break;
             }
-            //目前测试使用，如果有一个连接连接上来，则将服务器关闭
-            if(socket!=null){
                 manageConnectedSocket(socket);
-                try{
-                    //关闭服务器 如果想一直开启服务器接受多个连接，则注释下面的代码
-                    serverSocket.close();
-                    handler.sendEmptyMessage(Constant.MSG_FINISH_LISTENING);
-                }catch (IOException e){
-
-                }
-                break;
-            }
         }
     }
     private  void manageConnectedSocket(BluetoothSocket socket) {
-        //关闭服务器 如果想一直开启服务器接受多个连接，则注释下面的if代码
-        if (connectedThread != null) {
-            connectedThread.cancel();
-        }
         handler.sendEmptyMessage(Constant.MSG_GOT_A_CLIENT);
         connectedThread = new ConnectedThread(socket, handler);
         connectedThread.start();
