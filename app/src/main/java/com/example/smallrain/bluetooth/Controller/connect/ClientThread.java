@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.Handler;
+import android.os.Message;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -27,7 +28,8 @@ public class ClientThread extends Thread {
         try {
             socket = device.createRfcommSocketToServiceRecord(MY_UUID);
         } catch (IOException e) {
-
+            Message message=handler.obtainMessage(Constant.MSG_ERROR,"客户端创建失败");
+            handler.sendMessage(message);
         }
     }
 
@@ -39,25 +41,22 @@ public class ClientThread extends Thread {
              socket.connect();
         }catch (IOException connectException){
             //如果该蓝牙设备的服务端没有开启，则会启动下面的代码，报错
-           handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,connectException));
-            try {
-                socket.close();
-            }catch (IOException closeException){
-
-            }
-            return;
+            Message message=handler.obtainMessage(Constant.MSG_ERROR,"组员："+device.getName()+"离线");
+            handler.sendMessage(message);
+                cancel();
+                return;
         }
         manageConnectdSocket(socket);
     }
     private  void manageConnectdSocket(BluetoothSocket socket){
-        handler.sendEmptyMessage(Constant.MSG_CONNECTION_TO_SERVER);
+        Message message=handler.obtainMessage(Constant.MSG_CONNECTION_TO_SERVER,"组员："+device.getName()+"在线");
+        handler.sendMessage(message);
         connectedThread=new ConnectedThread(socket,handler);
         connectedThread.start();
     }
 
     /**
      * 客户端发送消息给服务端
-     * @param data
      */
     public  void sendData(byte[]data){
         if(connectedThread!=null){
@@ -71,7 +70,8 @@ public class ClientThread extends Thread {
         try{
             socket.close();
         }catch (IOException e){
-
+            Message message=handler.obtainMessage(Constant.MSG_ERROR,"客户端关闭失败");
+            handler.sendMessage(message);
         }
     }
 }

@@ -4,6 +4,7 @@ import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothServerSocket;
 import android.bluetooth.BluetoothSocket;
 import android.os.Handler;
+import android.os.Message;
 
 import java.io.IOException;
 import java.util.UUID;
@@ -38,7 +39,6 @@ public class ServerSocketThread extends Thread {
                 handler.sendEmptyMessage(Constant.MSG_START_LISTENING);
                 socket = serverSocket.accept();
             } catch (IOException e) {
-                //handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR, e));
                 handler.sendEmptyMessage(Constant.MSG_FINISH_LISTENING);
                 break;
             }
@@ -46,13 +46,14 @@ public class ServerSocketThread extends Thread {
         }
     }
     private  void manageConnectedSocket(BluetoothSocket socket) {
-        handler.sendEmptyMessage(Constant.MSG_GOT_A_CLIENT);
+        Message message=handler.obtainMessage(Constant.MSG_GOT_A_CLIENT,socket.getRemoteDevice().getName());
+        handler.sendMessage(message);
         connectedThread = new ConnectedThread(socket, handler);
         connectedThread.start();
     }
 
     /**
-     * 服务器发送消息给客户端
+     * 服务器发送消息给客户端  基本不用这个方法
      * @param data
      */
    public  void sendData(byte[]data){
@@ -69,7 +70,8 @@ public class ServerSocketThread extends Thread {
             serverSocket.close();
             handler.sendEmptyMessage(Constant.MSG_FINISH_LISTENING);
         }catch (IOException e){
-
+            Message message=handler.obtainMessage(Constant.MSG_ERROR,"服务器关闭失败");
+            handler.sendMessage(message);
         }
     }
 }

@@ -182,20 +182,10 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
             BluetoothDevice device = deviceList.get(i);
+            controller.cancelDiscovery();//请求连接的时候，取消设备的搜索
             device.createBond();
         }
     };
-    //监听已绑定设备页面lisview的点击动作，点击代表与该设备进行通信
-    private AdapterView.OnItemClickListener bindedDeviceClick = new AdapterView.OnItemClickListener() {
-        @Override
-        public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-            BluetoothDevice device = boundedDeviceList.get(i);
-            clientThread = new ClientThread(device, controller.getAdapter(), mUIHandler);
-            clientThreadArrayList.add(clientThread);//点击一个设备，该设备存放到要组播的容器
-            clientThread.start();
-        }
-    };
-
     //重写方法，创建选项菜单
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -235,8 +225,10 @@ public class MainActivity extends AppCompatActivity {
         else if(id==R.id.find_device){
             //扫描其他设备
             if(controller.getBlueToothStatus()){
+                controller.cancelDiscovery();
+                deviceList.clear();
             adapter.refresh(deviceList);
-            controller.findDevice();
+            controller.startDiscovery();
             listView.setOnItemClickListener(bindDeviceClick);
         }else
             {
@@ -273,6 +265,7 @@ public class MainActivity extends AppCompatActivity {
         }
         return super.onOptionsItemSelected(item);
     }
+    //后期优化，下面代码的缺点是：每次组播要和组员一个个的建立连接，很耗费时间
     private void say(String word) {
         //实现组播，组员不能为空才可以进行组播
         int len=controller.getBoundedDeviceList().size();
@@ -283,6 +276,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         temp.sendData(word.getBytes("utf-8"));
                     } catch (UnsupportedEncodingException e) {
+
                     }
                 }
             }
@@ -299,6 +293,7 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         temp.sendData(word.getBytes("utf-8"));
                     } catch (UnsupportedEncodingException e) {
+
                     }
                 }
 
@@ -311,24 +306,24 @@ public class MainActivity extends AppCompatActivity {
         public void handleMessage(Message msg) {
             switch (msg.what) {
                 case Constant.MSG_START_LISTENING:
-                    showToast("开始监听 ");
+                   // showToast("开始监听 ");
                    // setProgressBarIndeterminateVisibility(true);
                     break;
                 case Constant.MSG_FINISH_LISTENING:
-                    showToast("监听结束");
+                    //showToast("监听结束");
                    // setProgressBarIndeterminateVisibility(false);
                     break;
                 case Constant.MSG_GOT_DATA:
-                    showToast("data: "+String.valueOf(msg.obj));
+                    showToast("Data: "+String.valueOf(msg.obj));
                     break;
                 case Constant.MSG_ERROR:
-                    showToast("error: "+String.valueOf(msg.obj));
+                    showToast("Error: "+String.valueOf(msg.obj));
                     break;
                 case Constant.MSG_CONNECTION_TO_SERVER:
-                    showToast("Connected to Server");
+                    showToast("Connected to Server "+String.valueOf(msg.obj));
                     break;
                 case Constant.MSG_GOT_A_CLIENT:
-                    showToast("Got a Client");
+                    showToast("Got a Client "+String.valueOf(msg.obj));
                     break;
             }
         }

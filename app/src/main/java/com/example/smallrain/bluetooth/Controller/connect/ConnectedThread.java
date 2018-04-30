@@ -29,7 +29,8 @@ public class ConnectedThread extends Thread {
             inputStream = socket.getInputStream();
             outputStream=socket.getOutputStream();
         }catch (Exception e){
-            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,e));
+            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,socket.getRemoteDevice().getName()+"异常"));
+            cancel();
         }
     }
     @Override
@@ -44,7 +45,7 @@ public class ConnectedThread extends Thread {
                     handler.sendMessage(message);
                 }
             }catch (IOException e){
-                   handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,e));
+                   handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,socket.getRemoteDevice().getName()+"离线"));
                    cancel();
                    break;
             }
@@ -55,16 +56,17 @@ public class ConnectedThread extends Thread {
         try{
             outputStream.write(bytes);
         }catch (IOException e){
-            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,e));
-             cancel();
+            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,socket.getRemoteDevice().getName()+"离线"));
+            cancel();
         }
     }
     /* Call this from the main activity to shutdown the connection */
-    public  void cancel(){
+    private void cancel(){
         try{
             socket.close();
         }catch (Exception e){
-
+            handler.sendMessage(handler.obtainMessage(Constant.MSG_ERROR,socket.getRemoteDevice().getName()+"关闭失败"));
+            cancel();
         }
     }
 
