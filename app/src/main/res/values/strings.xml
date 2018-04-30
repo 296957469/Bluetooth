@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Bluetooth</string>
+    <string name="visiblity">允许设备被发现</string>
+    <string name="find_device">搜索设备</string>
+    <string name="bonded_device">已绑定设备</string>
+    <string name="turnOn">打开蓝牙</string>
+    <string name="turnOff">关闭蓝牙</string>
+    <string name="listening">开启服务端</string>
+    <string name="stop_listening">关闭服务端</string>
+    <string name="disconnect">断开所有的连接</string>
+    <string name="hello">say Hello</string>
+    <string name="hi">say Hi</string>
+
+</resources>
