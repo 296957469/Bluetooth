@@ -1,6 +1,7 @@
 package com.example.smallrain.bluetooth.View;
 
 import android.Manifest;
+import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.content.BroadcastReceiver;
@@ -53,11 +54,14 @@ public class MainActivity extends AppCompatActivity {
     private ArrayList<ClientThread>clientThreadArrayList=new ArrayList<>();
     //消息通知
     private Handler mUIHandler=new MyHandler();
+    //状态滚动条
+    private ProgressDialog progressDialog;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         initUI();
+        progressDialog=new ProgressDialog(this);
         //广播的过滤器
         IntentFilter filter = new IntentFilter();
         //开始查找
@@ -103,17 +107,19 @@ public class MainActivity extends AppCompatActivity {
             String action=intent.getAction();
             //1.开始查找
             if(BluetoothAdapter.ACTION_DISCOVERY_STARTED.equals(action)){
-                setProgressBarIndeterminate(true);
                 //初始化数据列表
                 deviceList.clear();
                 adapter.notifyDataSetChanged();
-                showToast("开始查找");
+                progressDialog.setTitle("开始搜索，请耐心等待");
+                progressDialog.setMessage("查找中.......");
+                progressDialog.setCancelable(false);
+                progressDialog.show();
             }
             //2.结束查找
            if(BluetoothAdapter.ACTION_DISCOVERY_FINISHED.equals(action))
             {
-                setProgressBarIndeterminate(false);
-                showToast("结束查找");
+                 progressDialog.dismiss();
+                showToast("查找结束");
             }
             //3.查找设备
             if(BluetoothDevice.ACTION_FOUND.equals(action))
@@ -225,11 +231,14 @@ public class MainActivity extends AppCompatActivity {
         else if(id==R.id.find_device){
             //扫描其他设备
             if(controller.getBlueToothStatus()){
+                //如果已经在扫描状态中，则取消原来的扫描，重新开始新的扫描
+                progressDialog.dismiss();
+
                 controller.cancelDiscovery();
                 deviceList.clear();
-            adapter.refresh(deviceList);
-            controller.startDiscovery();
-            listView.setOnItemClickListener(bindDeviceClick);
+                adapter.refresh(deviceList);
+                controller.startDiscovery();
+                listView.setOnItemClickListener(bindDeviceClick);
         }else
             {
                 showToast("请先打开蓝牙");
@@ -266,12 +275,13 @@ public class MainActivity extends AppCompatActivity {
         return super.onOptionsItemSelected(item);
     }
     //后期优化，下面代码的缺点是：每次组播要和组员一个个的建立连接，很耗费时间
-    private void say(String word) {
+    private void say(final String word) {
         //实现组播，组员不能为空才可以进行组播
         int len=controller.getBoundedDeviceList().size();
         if(len>0) {
             //如果已经和所有组员建立好了连接，则直接进行组播
             if(clientThreadArrayList.size()>0){
+                showToast("组播开始");
                 for (ClientThread temp : clientThreadArrayList) {
                     try {
                         temp.sendData(word.getBytes("utf-8"));
@@ -282,22 +292,39 @@ public class MainActivity extends AppCompatActivity {
             }
             else{
                 //先和所有组员建立连接
+                progressDialog.setTitle("组员在线状态监测中，请耐心等待30秒");
+                progressDialog.setMessage("监测中.......");
+                progressDialog.setCancelable(false);
+                progressDialog.show();
                 for (BluetoothDevice device : controller.getBoundedDeviceList()) {
                     clientThread = new ClientThread(device, controller.getAdapter(), mUIHandler);
                     clientThread.start();
                     clientThreadArrayList.add(clientThread);
                 }
-                //然后再实现组播
-                // 缺点：有些连接并没有真正的连接上，但是发送消息的时候也被调用来发送消息
-                for (ClientThread temp : clientThreadArrayList) {
-                    try {
-                        temp.sendData(word.getBytes("utf-8"));
-                    } catch (UnsupportedEncodingException e) {
-
+                new Thread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            //让滚动条转动30秒后消失，再进行消息的组播
+                            Thread.sleep(1000*30);
+                            progressDialog.dismiss();
+                            showToast("组播开始");
+                            for (ClientThread temp : clientThreadArrayList) {
+                                try {
+                                    temp.sendData(word.getBytes("utf-8"));
+                                } catch (UnsupportedEncodingException e) {
+                                }
+                            }
+                        } catch (InterruptedException e) {
+                            e.printStackTrace();
+                        }
                     }
-                }
+                }).start();
 
             }
+        }
+        else{
+            showToast("组员为空，请先添加组员");
         }
     }
 
