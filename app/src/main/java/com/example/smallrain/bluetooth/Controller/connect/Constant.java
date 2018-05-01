@@ -27,6 +27,10 @@ public class Constant {
      */
      public static final int MSG_GOT_DATA=5;
     /**
+     * 记录设备连接的次数
+     */
+    public  static final  int PEOPLE=6;
+    /**
      * 出错
      */
      public  static final  int MSG_ERROR=-1;

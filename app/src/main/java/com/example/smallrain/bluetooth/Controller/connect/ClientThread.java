@@ -43,6 +43,8 @@ public class ClientThread extends Thread {
             //如果该蓝牙设备的服务端没有开启，则会启动下面的代码，报错
             Message message=handler.obtainMessage(Constant.MSG_ERROR,"组员："+device.getName()+"离线");
             handler.sendMessage(message);
+            Message message2=handler.obtainMessage(Constant.PEOPLE,device.getName());
+            handler.sendMessage(message2);
                 cancel();
                 return;
         }
@@ -51,6 +53,8 @@ public class ClientThread extends Thread {
     private  void manageConnectdSocket(BluetoothSocket socket){
         Message message=handler.obtainMessage(Constant.MSG_CONNECTION_TO_SERVER,"组员："+device.getName()+"在线");
         handler.sendMessage(message);
+        Message message2=handler.obtainMessage(Constant.PEOPLE,device.getName());
+        handler.sendMessage(message2);
         connectedThread=new ConnectedThread(socket,handler);
         connectedThread.start();
     }

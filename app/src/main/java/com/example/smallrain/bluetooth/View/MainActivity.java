@@ -56,6 +56,9 @@ public class MainActivity extends AppCompatActivity {
     private Handler mUIHandler=new MyHandler();
     //状态滚动条
     private ProgressDialog progressDialog;
+    //让状态滚动条消失的变量，每当和组员建立一个连接之后，加一
+    private int people;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -219,6 +222,7 @@ public class MainActivity extends AppCompatActivity {
                     serverSocketThread=null;
                 }
                 allCancle();
+              people=0;
                controller.turnOffBlueTooth();
             }
           // showToast("蓝牙已经关闭");
@@ -292,8 +296,8 @@ public class MainActivity extends AppCompatActivity {
             }
             else{
                 //先和所有组员建立连接
-                progressDialog.setTitle("组员在线状态监测中，请耐心等待30秒");
-                progressDialog.setMessage("监测中.......");
+                progressDialog.setTitle("组员在线状态检测，请耐心等待");
+                progressDialog.setMessage("检测中.......");
                 progressDialog.setCancelable(false);
                 progressDialog.show();
                 for (BluetoothDevice device : controller.getBoundedDeviceList()) {
@@ -304,19 +308,21 @@ public class MainActivity extends AppCompatActivity {
                 new Thread(new Runnable() {
                     @Override
                     public void run() {
-                        try {
-                            //让滚动条转动30秒后消失，再进行消息的组播
-                            Thread.sleep(1000*30);
-                            progressDialog.dismiss();
-                            showToast("组播开始");
-                            for (ClientThread temp : clientThreadArrayList) {
-                                try {
-                                    temp.sendData(word.getBytes("utf-8"));
-                                } catch (UnsupportedEncodingException e) {
+                        boolean flag = true;
+                        while (flag) {
+                            //和所有的组员建立了连接之后
+                            if (people == clientThreadArrayList.size()) {
+                                people=0;
+                                progressDialog.dismiss();
+                                flag = false;
+                                showToast("组播开始");
+                                for (ClientThread temp : clientThreadArrayList) {
+                                    try {
+                                        temp.sendData(word.getBytes("utf-8"));
+                                    } catch (UnsupportedEncodingException e) {
+                                    }
                                 }
                             }
-                        } catch (InterruptedException e) {
-                            e.printStackTrace();
                         }
                     }
                 }).start();
@@ -351,6 +357,9 @@ public class MainActivity extends AppCompatActivity {
                     break;
                 case Constant.MSG_GOT_A_CLIENT:
                     showToast("Got a Client "+String.valueOf(msg.obj));
+                    break;
+                case Constant.PEOPLE:
+                    people++;
                     break;
             }
         }
